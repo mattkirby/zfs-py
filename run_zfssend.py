@@ -6,12 +6,12 @@ A tool to replicate volumes
 """
 
 #import daemon
-import zfssend
+import zfs
 import argparse
 
 
 parse = argparse.ArgumentParser(description='A program to replicate ZFS volumes')
-zfs = zfssend.ZfsSend()
+zfs = zfs.zfssend.ZfsSend()
 
 parse.add_argument('-V', '--volume', help='The volume to replicate', required=True)
 parse.add_argument('-H', '--host', help='The host to receive replicas', required=True)

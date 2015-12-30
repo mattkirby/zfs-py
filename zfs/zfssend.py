@@ -18,7 +18,7 @@ class ZfsSend:
     def __init__(self):
         self.hosts = []
 
-    def volume_exists(self, volume, host=None):
+    def volume_exists(self, volume, host=None, sudo=True):
         """
         Find if remote volume exists
         """
@@ -27,6 +27,8 @@ class ZfsSend:
             command = ['zfs', 'list', volume]
             if host:
                 command = ['ssh', host, 'sudo'] + command
+            elif sudo:
+                command = ['sudo'] + command
             out = subprocess.check_call(
                 command, stdout=fnull, stderr=subprocess.STDOUT)
             fnull.close()
@@ -35,7 +37,7 @@ class ZfsSend:
             fnull.close()
             return False
 
-    def get_snapshots(self, volume, host=None):
+    def get_snapshots(self, volume, host=None, sudo=True):
         """
         Return all snapshots for a volume
         """
@@ -44,6 +46,8 @@ class ZfsSend:
                        'snapshot', '-o', 'name', volume]
             if host:
                 command = ['ssh', host, 'sudo'] + command
+            elif sudo:
+                command = ['sudo'] + command
             out = subprocess.check_output(command)
             snapshot = []
             snapshots = out.split('\n')[1:-1]
@@ -84,7 +88,7 @@ class ZfsSend:
             raise
 
 
-    def replicate(self, volume, host):
+    def replicate(self, volume, host, sudo=True):
         """
         Replicate zfs volumes
         """
@@ -104,14 +108,20 @@ class ZfsSend:
                 options = '-R'
                 snaps = ['{}@{}'.format(volume, local[-1])]
             if snaps:
+                send_command = ['zfs', 'send', options]
+                if sudo:
+                    send_command = ['sudo'] + send_command
                 send = subprocess.Popen(
-                    ['zfs', 'send', options] + snaps, stdout=subprocess.PIPE)
+                    send_command + snaps, stdout=subprocess.PIPE)
                 receive = subprocess.Popen(
                     ['ssh', host, 'sudo', 'zfs', 'receive', volume],
                     stdin=send.stdout, stdout=subprocess.PIPE)
                 send.stdout.close()
                 output = receive.communicate()
-                return 'Success'
+                if 'could not send' in output:
+                    return "Replication failed with the message \n{}".format(output)
+                else:
+                    return 'Successfully replicated {}'.format(volume)
             else:
                 return 'Everything is up to date'
         except Exception:
