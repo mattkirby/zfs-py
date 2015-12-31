@@ -126,6 +126,7 @@ class ZfsSend:
                 else:
                     return 'Successfully replicated {}'.format(volume)
             else:
+                self.remove_lock(volume)
                 return 'Everything is up to date'
         except Exception:
             self.remove_lock(volume)
@@ -146,11 +147,11 @@ class ZfsSend:
             if os.path.isfile(lockfile):
                 print 'A lockfile exists'
                 sys.exit(3)
-            lock = open('lockfile', 'w')
+            lock = open(lockfile, 'w')
             lock.close()
         except Exception:
             print 'Cannot create a lockfile at {}'.format(volume)
-            raise
+            sys.exit(4)
 
     @classmethod
     def remove_lock(cls, volume):
