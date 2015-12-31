@@ -1,1 +1,1 @@
-from zfs import zfssend, ssh
+from zfs import zfssend

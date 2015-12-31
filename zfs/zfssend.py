@@ -8,6 +8,7 @@ order to facilitate synchronizing data across multiple systems.
 
 import os
 import subprocess
+import sys
 
 
 class ZfsSend:
@@ -95,6 +96,7 @@ class ZfsSend:
         try:
             snaps = None
             local = self.get_snapshots(volume)
+            self.lock_file(volume)
             remote = self.has_vol_snapshots(volume, host)
             if remote:
                 diff = list(set(local) - set(remote))
@@ -118,6 +120,7 @@ class ZfsSend:
                     stdin=send.stdout, stdout=subprocess.PIPE)
                 send.stdout.close()
                 output = receive.communicate()
+                self.remove_lock(volume)
                 if 'could not send' in output:
                     return "Replication failed with the message \n{}".format(output)
                 else:
@@ -125,9 +128,37 @@ class ZfsSend:
             else:
                 return 'Everything is up to date'
         except Exception:
+            self.remove_lock(volume)
             raise
 
     def take_snapshot(self, volume):
         """
         Take a snapshot of a volume with timestamp
         """
+
+    @classmethod
+    def lock_file(cls, volume):
+        """
+        Create a lock file for tracking state of replication
+        """
+        try:
+            lockfile = '/{}/.replication_lock'.format(volume)
+            if os.path.isfile(lockfile):
+                print 'A lockfile exists'
+                sys.exit(3)
+            lock = open('lockfile', 'w')
+            lock.close()
+        except Exception:
+            print 'Cannot create a lockfile at {}'.format(volume)
+            raise
+
+    @classmethod
+    def remove_lock(cls, volume):
+        """
+        Remove the lockfile
+        """
+        try:
+            lockfile = '/{}/.replication_lock'.format(volume)
+            os.remove(lockfile)
+        except Exception:
+            print 'Cannot remove lockfile {}'.format(lockfile)
