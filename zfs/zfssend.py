@@ -123,6 +123,8 @@ class ZfsSend:
                 self.remove_lock(volume)
                 if 'could not send' in output:
                     return "Replication failed with the message \n{}".format(output)
+                elif 'incremental source' in output:
+                    return 'Incremental source does not exist'
                 else:
                     return 'Successfully replicated {}'.format(volume)
             else:
