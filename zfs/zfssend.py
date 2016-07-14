@@ -98,32 +98,39 @@ class ZfsSend:
             local = self.get_snapshots(volume)
             self.lock_file(volume)
             remote = self.has_vol_snapshots(volume, host)
+            local_latest, remote_latest = local[-1], remote[-1]
             if remote:
                 diff = list(set(local) - set(remote))
-                if diff:
+            if diff:
+                if remote_latest in diff:
                     options = '-I'
                     snaps = [
-                        '@{}'.format(remote[-1]),
-                        '{}@{}'.format(volume, local[-1])
-                        ]
+                        '@{}'.format(remote_latest),
+                    '{}@{}'.format(volume, local_latest[-1])
+                    ]
+                else:
+                    options = '-R'
+                    force = True
             else:
                 options = '-R'
                 snaps = ['{}@{}'.format(volume, local[-1])]
             if snaps:
                 send_command = ['zfs', 'send', options]
+                recv_command = ['ssh', host, 'sudo', 'zfs', 'receive', volume]
+                if force:
+                    recv_command.insert(-1, '-F')
                 if sudo:
                     send_command = ['sudo'] + send_command
                 send = subprocess.Popen(
                     send_command + snaps, stdout=subprocess.PIPE)
                 receive = subprocess.Popen(
-                    ['ssh', host, 'sudo', 'zfs', 'receive', volume],
-                    stdin=send.stdout, stdout=subprocess.PIPE)
+                    recv_command, stdin=send.stdout, stdout=subprocess.PIPE)
                 send.stdout.close()
                 output = receive.communicate()
                 self.remove_lock(volume)
                 if 'could not send' in output:
                     return "Replication failed with the message \n{}".format(output)
-                elif 'incremental source' in output:
+                elif 'cannot receive:' in output:
                     return 'Incremental source does not exist'
                 else:
                     return 'Successfully replicated {}'.format(volume)
