@@ -99,21 +99,18 @@ class ZfsSend:
             self.lock_file(volume)
             remote = self.has_vol_snapshots(volume, host)
             local_latest, remote_latest = local[-1], remote[-1]
+            snaps = ['{}@{}'.format(volume, local_latest)]
             if remote:
                 diff = list(set(local) - set(remote))
             if diff:
                 if remote_latest in diff:
                     options = '-I'
-                    snaps = [
-                        '@{}'.format(remote_latest),
-                    '{}@{}'.format(volume, local_latest[-1])
-                    ]
+                    snaps.insert(0, '@{}'.format(remote_latest))
                 else:
                     options = '-R'
                     force = True
             else:
                 options = '-R'
-                snaps = ['{}@{}'.format(volume, local[-1])]
             if snaps:
                 send_command = ['zfs', 'send', options]
                 recv_command = ['ssh', host, 'sudo', 'zfs', 'receive', volume]
