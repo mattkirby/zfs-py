@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='zfs',
-    version='0.1.14',
+    version='0.1.33',
     packages=find_packages(),
     author='Matt Kirby',
     author_email='kirby@puppetlabs.com',

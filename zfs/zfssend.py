@@ -63,80 +63,81 @@ class ZfsSend:
         """
         Check if a volume exists and has snapshots
         """
-        try:
-            if self.volume_exists(volume, host):
-                snapshots = self.get_snapshots(volume, host)
+        if self.volume_exists(volume, host):
+            snapshots = self.get_snapshots(volume, host)
             return snapshots
-        except Exception:
+        else:
             return False
 
     def snapshot_diff(self, volume, host):
         """
         Check if remote and local snapshots differ
         """
-        try:
-            remote = self.has_vol_snapshots(volume, host)
-            if remote:
-                local = self.has_vol_snapshots(volume)
-                diff = list(set(local) - set(remote))
-                if diff:
-                    return diff
-                else:
-                    return False
+        remote = self.has_vol_snapshots(volume, host)
+        if remote:
+            local = self.has_vol_snapshots(volume)
+            diff = list(set(local) - set(remote))
+            if diff:
+                return diff
             else:
                 return False
-        except Exception:
-            raise
+        else:
+            return False
 
+    def replication_type(self, volume, host):
+        """
+        Determine the type of replication to perform
 
-    def replicate(self, volume, host, sudo=True):
+        Detects whether target system has zfs volume
+        If detected, determines whether incremental sync is possible
+        """
+        snaps, force = None, None
+        local_snapshots = self.get_snapshots(volume)
+        remote_snapshots = self.has_vol_snapshots(volume, host)
+        snaps = ['{}@{}'.format(volume, local_snapshots[-1])]
+        send_options = ['-R']
+        recv_options = ['-F', '-d']
+        if remote_snapshots:
+            if remote_snapshots[-1] == local_snapshots[-1]:
+                return False
+            # Check if common snapshot exists
+            elif remote_snapshots[-1] in local_snapshots:
+                print 'Found incremental snapshot point at {}'.format(remote_snapshots[-1])
+#                diff = list(set(local_snapshots) - set(remote_snapshots))
+                send_options.append('-I')
+                snaps.insert(0, '@{}'.format(remote_snapshots[-1]))
+            elif remote_snapshots[-1] not in local_snapshots:
+                print 'No common incremental snapshot found. Forcing re-sync.'
+            else:
+                print "I don't know how I got here"
+                return False
+        else:
+            print 'Initial replication initiated.'
+        return send_options, recv_options, snaps
+
+    def replicate(self, volume, host, sudo=True, target_volume='backup-tank'):
         """
         Replicate zfs volumes
         """
-        try:
-            snaps = None
-            local = self.get_snapshots(volume)
+        repl_type = self.replication_type(volume, host)
+        if repl_type:
+            send_options, recv_options, snaps = repl_type
+            send_command = ['zfs', 'send'] + send_options + snaps
+            recv_command = ['ssh', host, 'sudo', 'zfs', 'receive'] + recv_options + [target_volume]
+            if sudo:
+                send_command = ['sudo'] + send_command
             self.lock_file(volume)
-            remote = self.has_vol_snapshots(volume, host)
-            local_latest, remote_latest = local[-1], remote[-1]
-            snaps = ['{}@{}'.format(volume, local_latest)]
-            if remote:
-                diff = list(set(local) - set(remote))
-            if diff:
-                if remote_latest in diff:
-                    options = '-I'
-                    snaps.insert(0, '@{}'.format(remote_latest))
-                else:
-                    options = '-R'
-                    force = True
-            else:
-                options = '-R'
-            if snaps:
-                send_command = ['zfs', 'send', options]
-                recv_command = ['ssh', host, 'sudo', 'zfs', 'receive', volume]
-                if force:
-                    recv_command.insert(-1, '-F')
-                if sudo:
-                    send_command = ['sudo'] + send_command
-                send = subprocess.Popen(
-                    send_command + snaps, stdout=subprocess.PIPE)
-                receive = subprocess.Popen(
-                    recv_command, stdin=send.stdout, stdout=subprocess.PIPE)
-                send.stdout.close()
-                output = receive.communicate()
-                self.remove_lock(volume)
-                if 'could not send' in output:
-                    return "Replication failed with the message \n{}".format(output)
-                elif 'cannot receive:' in output:
-                    return 'Incremental source does not exist'
-                else:
-                    return 'Successfully replicated {}'.format(volume)
-            else:
-                self.remove_lock(volume)
-                return 'Everything is up to date'
-        except Exception:
+            send = subprocess.Popen(send_command, stdout=subprocess.PIPE)
+            receive = subprocess.Popen(recv_command, stdin=send.stdout, stdout=subprocess.PIPE)
+            send.stdout.close()
+            output = receive.communicate()
             self.remove_lock(volume)
-            raise
+            if output[0]:
+                return output[0]
+            else:
+                return 'Replication of {} completed successfully with snapshot from {}'
+        else:
+            return 'Volume {} is up to date'.format(volume)
 
     def take_snapshot(self, volume):
         """
