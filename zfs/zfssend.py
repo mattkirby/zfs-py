@@ -9,6 +9,7 @@ order to facilitate synchronizing data across multiple systems.
 import os
 import subprocess
 import sys
+import atexit
 
 
 class ZfsSend:
@@ -119,6 +120,7 @@ class ZfsSend:
         """
         Replicate zfs volumes
         """
+        atexit.register(self.remove_lock, volume)
         repl_type = self.replication_type(volume, host)
         if repl_type:
             send_options, recv_options, snaps = repl_type
@@ -131,11 +133,10 @@ class ZfsSend:
             receive = subprocess.Popen(recv_command, stdin=send.stdout, stdout=subprocess.PIPE)
             send.stdout.close()
             output = receive.communicate()
-            self.remove_lock(volume)
             if output[0]:
                 return output[0]
             else:
-                return 'Replication of {} completed successfully with snapshot from {}'
+                return 'Replication of {} completed successfully with snapshot from {}'.format(volume, snaps[-1].split('@')[-1])
         else:
             return 'Volume {} is up to date'.format(volume)
 
