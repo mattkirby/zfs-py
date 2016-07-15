@@ -130,7 +130,8 @@ class ZfsSend:
                 send_command = ['sudo'] + send_command
             self.lock_file(volume)
             send = subprocess.Popen(send_command, stdout=subprocess.PIPE)
-            receive = subprocess.Popen(recv_command, stdin=send.stdout, stdout=subprocess.PIPE)
+            pv = subprocess.Popen(['pv'], stdin=send.stdout, stdout=subprocess.PIPE)
+            receive = subprocess.Popen(recv_command, stdin=pv.stdout, stdout=subprocess.PIPE)
             send.stdout.close()
             output = receive.communicate()
             if output[0]:
@@ -168,6 +169,7 @@ class ZfsSend:
         """
         try:
             lockfile = '/{}/.replication_lock'.format(volume)
-            os.remove(lockfile)
+            if os.path.isfile(lockfile):
+                os.remove(lockfile)
         except Exception:
             print 'Cannot remove lockfile {}'.format(lockfile)
