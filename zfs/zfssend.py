@@ -113,7 +113,7 @@ class ZfsSend:
                 print "I don't know how I got here"
                 return False
         else:
-            print 'Initial replication initiated.'
+            print '{} does not exist on the target. Starting replication.'.format(volume)
         return send_options, recv_options, snaps
 
     def replicate(self, volume, host, sudo=True, target_volume='backup-tank'):
