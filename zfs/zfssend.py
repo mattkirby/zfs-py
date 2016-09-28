@@ -103,12 +103,14 @@ class ZfsSend:
                 return False
             # Check if common snapshot exists
             elif remote_snapshots[-1] in local_snapshots:
-                print 'Found incremental snapshot point at {}'.format(remote_snapshots[-1])
-#                diff = list(set(local_snapshots) - set(remote_snapshots))
+                print 'Found incremental snapshot point for {} at {}'.format(volume, remote_snapshots[-1])
                 send_options.append('-I')
                 snaps.insert(0, '@{}'.format(remote_snapshots[-1]))
             elif remote_snapshots[-1] not in local_snapshots:
-                print 'No common incremental snapshot found. Forcing re-sync.'
+                print 'No common incremental snapshot found. Removing snapshots and forcing re-sync.'
+                remove = subprocess.check_output(
+                    ['ssh', host, 'sudo', '/usr/local/bin/zfs_snapshot',
+                     '-k', '0', '-V', volume])
             else:
                 print "I don't know how I got here"
                 return False
@@ -134,8 +136,12 @@ class ZfsSend:
             receive = subprocess.Popen(recv_command, stdin=pv.stdout, stdout=subprocess.PIPE)
             send.stdout.close()
             output = receive.communicate()
+            print 'rc = {}'.format(subprocess.Popen.returncode)
+            print output
             if output[0]:
                 return output[0]
+            elif 'cannot receive' in output[0]:
+                return 'Replication failed with with message: {}'.format(output[0])
             else:
                 return 'Replication of {} completed successfully with snapshot from {}'.format(volume, snaps[-1].split('@')[-1])
         else:
