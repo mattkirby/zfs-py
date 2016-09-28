@@ -136,8 +136,6 @@ class ZfsSend:
             receive = subprocess.Popen(recv_command, stdin=pv.stdout, stdout=subprocess.PIPE)
             send.stdout.close()
             output = receive.communicate()
-            print 'rc = {}'.format(subprocess.Popen.returncode)
-            print output
             if output[0]:
                 return output[0]
             elif 'cannot receive' in output[0]:
